@@ -149,6 +149,9 @@ class PointNetCls(nn.Module):
 
 class PointNetDenseCls(nn.Module):
     def __init__(self, k = 2, feature_transform=False):
+        """
+        k: num_classes
+        """
         super(PointNetDenseCls, self).__init__()
         self.k = k
         self.feature_transform=feature_transform
@@ -172,6 +175,34 @@ class PointNetDenseCls(nn.Module):
         x = x.transpose(2,1).contiguous()
         x = F.log_softmax(x.view(-1,self.k), dim=-1)
         x = x.view(batchsize, n_pts, self.k)
+        return x, trans, trans_feat
+
+class PointNetDenseNormalPred3DVer(nn.Module):
+    """
+    3D ver means the networks predicts the x,y,z component of normals.
+    """
+    def __init__(self, feature_transform=False):
+        super(PointNetDenseNormalPred3DVer, self).__init__()
+        self.feature_transform=feature_transform
+        self.feat = PointNetfeat(global_feat=False, feature_transform=feature_transform)
+        self.conv1 = torch.nn.Conv1d(1088, 512, 1)
+        self.conv2 = torch.nn.Conv1d(512, 256, 1)
+        self.conv3 = torch.nn.Conv1d(256, 128, 1)
+        self.conv4 = torch.nn.Conv1d(128, 3, 1)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.bn3 = nn.BatchNorm1d(128)
+
+    def forward(self, x):
+
+        x, trans, trans_feat = self.feat(x)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.conv4(x) # [N, 3, N_pts]
+
+        x = x.transpose(2,1).contiguous() # [N, N_pts, 3]
+
         return x, trans, trans_feat
 
 def feature_transform_regularizer(trans):
