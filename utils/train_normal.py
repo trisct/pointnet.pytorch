@@ -16,9 +16,9 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--batchSize', type=int, default=2, help='input batch size')
+    '--batchSize', type=int, default=32, help='input batch size')
 parser.add_argument(
-    '--workers', type=int, help='number of data loading workers', default=1)
+    '--workers', type=int, help='number of data loading workers', default=8)
 parser.add_argument(
     '--nepoch', type=int, default=25, help='number of epochs to train for')
 parser.add_argument('--outf', type=str, default='normal', help='output folder')
@@ -99,7 +99,7 @@ for epoch in range(opt.nepoch):
         loss.backward()
         optimizer.step()
 
-        print('[%d: %d/%d] train loss: %6f. loss_inner_prod: %.6f, loss_norm_ref: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
+        print('[%d: %d/%d] train loss: %6f. loss_inner_prod: %.6f, loss_norm_reg: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
             % (epoch, i, num_batch,
                loss.item(), loss_inner_prod.item(), loss_norm_reg.item(),
                accu_inner_prod[0], accu_inner_prod[1], accu_inner_prod[2]))
