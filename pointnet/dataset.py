@@ -132,6 +132,7 @@ class ShapeNetDataset(data.Dataset):
         seg = torch.from_numpy(seg)
         cls = torch.from_numpy(np.array([cls]).astype(np.int64))
 
+        print('[HERE: In pointnet.dataset.ShapeNetDataset.__getitem__] seg.shape =', point_set.shape)
         print('[HERE: In pointnet.dataset.ShapeNetDataset.__getitem__] seg.shape =', seg.shape)
         print('[HERE: In pointnet.dataset.ShapeNetDataset.__getitem__] cls.shape =', cls.shape)
 
