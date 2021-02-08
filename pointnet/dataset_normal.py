@@ -18,8 +18,12 @@ class NormalDataset(data.Dataset):
                  data_augmentation=True):
         self.npoints = npoints
         self.root = root
-        self.idfile = os.path.join(self.root, 'object_list.txt')
         self.data_augmentation = data_augmentation
+
+        if split == 'train':
+            self.idfile = os.path.join(self.root, 'train_split.txt')
+        else:
+            self.idfile = os.path.join(self.root, 'valid_split.txt')
 
         with open(self.idfile, 'r') as f:
             self.objects = f.readlines()

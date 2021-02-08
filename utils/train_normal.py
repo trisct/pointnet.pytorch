@@ -16,7 +16,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--batchSize', type=int, default=32, help='input batch size')
+    '--batchSize', type=int, default=8, help='input batch size')
 parser.add_argument(
     '--workers', type=int, help='number of data loading workers', default=8)
 parser.add_argument(
@@ -66,7 +66,7 @@ normal_predictor = PointNetDenseNormalPred3DVer(feature_transform=opt.feature_tr
 if opt.model != '':
     normal_predictor.load_state_dict(torch.load(opt.model))
 
-optimizer = optim.Adam(normal_predictor.parameters(), lr=0.001, betas=(0.9, 0.999))
+optimizer = optim.Adam(normal_predictor.parameters(), lr=0.0, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 normal_predictor.cuda()
 
@@ -104,21 +104,26 @@ for epoch in range(opt.nepoch):
                loss.item(), loss_inner_prod.item(), loss_norm_reg.item(),
                accu_inner_prod[0], accu_inner_prod[1], accu_inner_prod[2]))
 
-        """
-        if i % 10 == 0:
-            j, data = next(enumerate(testdataloader, 0))
-            points, target = data
-            points = points.transpose(2, 1)
-            points, target = points.cuda(), target.cuda()
-            classifier = classifier.eval()
-            pred, _, _ = classifier(points)
-            pred = pred.view(-1, num_classes)
-            target = target.view(-1, 1)[:, 0] - 1
-            loss = F.nll_loss(pred, target)
-            pred_choice = pred.data.max(1)[1]
-            correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize * 2500)))
-        """
+        with torch.no_grad():
+            if i % 10 == 0:
+                j, data = next(enumerate(testdataloader, 0))
+                points, target = data
+                points = points.transpose(2, 1)
+                points, target = points.cuda(), target.cuda()
+
+                normal_predictor = normal_predictor.eval()
+                pred, _, _ = normal_predictor(points)
+                pred = pred.view(-1, 3)
+                target = target.view(-1, 3)
+
+                loss_inner_prod, accu_inner_prod = inner_prod_loss(pred, target, accu_thresholds_in_deg=[5, 15, 25])
+                loss_norm_reg = normalization_reg_loss(pred)
+                loss = loss_inner_prod + loss_norm_reg
+
+                print('[%d: %d/%d] train loss: %6f. loss_inner_prod: %.6f, loss_norm_reg: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
+                    % (epoch, i, num_batch,
+                    loss.item(), loss_inner_prod.item(), loss_norm_reg.item(),
+                    accu_inner_prod[0], accu_inner_prod[1], accu_inner_prod[2]))    
 
     torch.save(normal_predictor.state_dict(), '%s/normal_model_%d.pth' % (opt.outf, epoch))
 
