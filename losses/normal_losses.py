@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+DIV_EPSILON = 1e-8
+
 def inner_prod_loss(input, target, accu_thresholds_in_deg=None):
     """
     input: [..., 3], where `...` for input and target are the same.
@@ -15,8 +17,8 @@ def inner_prod_loss(input, target, accu_thresholds_in_deg=None):
     If accu_thresholds is not None, then the function returns a list of accuracies based on these thresholds
     """
 
-    normalized_pred = input / (input ** 2).sum(dim=-1, keepdim=True).sqrt()
-    normalized_target = target / (target ** 2).sum(dim=-1, keepdim=True).sqrt()
+    normalized_pred = input / ((input ** 2).sum(dim=-1, keepdim=True).sqrt() + DIV_EPSILON)
+    normalized_target = target / ((target ** 2).sum(dim=-1, keepdim=True).sqrt() + DIV_EPSILON)
 
     inner_prod = (normalized_pred * normalized_target).sum(dim=-1)
 

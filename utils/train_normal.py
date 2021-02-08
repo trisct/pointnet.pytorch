@@ -6,7 +6,7 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset_normal import NormalDataset
+from pointnet.dataset_normal import NormalDatasetAllInOne
 from pointnet.model import PointNetDenseNormalPred3DVer, feature_transform_regularizer
 from losses.normal_losses import inner_prod_loss, normalization_reg_loss
 import torch.nn.functional as F
@@ -16,12 +16,12 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--batchSize', type=int, default=8, help='input batch size')
+    '--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument(
-    '--workers', type=int, help='number of data loading workers', default=8)
+    '--workers', type=int, help='number of data loading workers', default=1)
 parser.add_argument(
-    '--nepoch', type=int, default=25, help='number of epochs to train for')
-parser.add_argument('--outf', type=str, default='normal', help='output folder')
+    '--nepoch', type=int, default=1000, help='number of epochs to train for')
+parser.add_argument('--outf', type=str, default='ABCthingi10k_normal', help='output folder')
 parser.add_argument('--model', type=str, default='', help='model path')
 parser.add_argument('--dataset', type=str, required=True, help="dataset path")
 parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
@@ -34,23 +34,27 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
-dataset = NormalDataset(
-    root=opt.dataset)
+dataset = NormalDatasetAllInOne(
+    root=opt.dataset,
+    copy_len=9000)
 dataloader = torch.utils.data.DataLoader(
     dataset,
     batch_size=opt.batchSize,
     shuffle=True,
-    num_workers=int(opt.workers))
+    num_workers=int(opt.workers),
+    drop_last=True)
 
-test_dataset = NormalDataset(
+test_dataset = NormalDatasetAllInOne(
     root=opt.dataset,
     split='test',
-    data_augmentation=False)
+    data_augmentation=False,
+    copy_len=1000)
 testdataloader = torch.utils.data.DataLoader(
     test_dataset,
     batch_size=opt.batchSize,
-    shuffle=True,
-    num_workers=int(opt.workers))
+    shuffle=False,
+    num_workers=int(opt.workers),
+    drop_last=True)
 
 print(len(dataset), len(test_dataset))
 
@@ -66,14 +70,14 @@ normal_predictor = PointNetDenseNormalPred3DVer(feature_transform=opt.feature_tr
 if opt.model != '':
     normal_predictor.load_state_dict(torch.load(opt.model))
 
-optimizer = optim.Adam(normal_predictor.parameters(), lr=0.0, betas=(0.9, 0.999))
+optimizer = optim.Adam(normal_predictor.parameters(), lr=0.001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 normal_predictor.cuda()
 
 num_batch = len(dataset) / opt.batchSize
 
 for epoch in range(opt.nepoch):
-    scheduler.step()
+    
     for i, data in enumerate(dataloader, 0):
         points, target = data
         # points: [N, N_pts, 3]
@@ -89,23 +93,31 @@ for epoch in range(opt.nepoch):
         target = target.view(-1, 3)
         #print(pred.size(), target.size())
 
+        if pred.isnan().sum() > 0:
+            print('[HERE: In pointnet.pytorch.utils.train_normal] nan pred occurred!')
+            break
+
         loss_inner_prod, accu_inner_prod = inner_prod_loss(pred, target, accu_thresholds_in_deg=[5, 15, 25])
         loss_norm_reg = normalization_reg_loss(pred)
         loss = loss_inner_prod + loss_norm_reg
+
+        if loss.isnan().sum() > 0:
+            print('[HERE: In pointnet.pytorch.utils.train_normal] nan loss occurred!')
+            break
 
         if opt.feature_transform:
             loss += feature_transform_regularizer(trans_feat) * 0.001
 
         loss.backward()
         optimizer.step()
-
+    
         print('[%d: %d/%d] train loss: %6f. loss_inner_prod: %.6f, loss_norm_reg: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
             % (epoch, i, num_batch,
                loss.item(), loss_inner_prod.item(), loss_norm_reg.item(),
                accu_inner_prod[0], accu_inner_prod[1], accu_inner_prod[2]))
 
         with torch.no_grad():
-            if i % 10 == 0:
+            if i % 70 == 0:
                 j, data = next(enumerate(testdataloader, 0))
                 points, target = data
                 points = points.transpose(2, 1)
@@ -120,11 +132,14 @@ for epoch in range(opt.nepoch):
                 loss_norm_reg = normalization_reg_loss(pred)
                 loss = loss_inner_prod + loss_norm_reg
 
-                print('[%d: %d/%d] train loss: %6f. loss_inner_prod: %.6f, loss_norm_reg: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
-                    % (epoch, i, num_batch,
+                print('[%d: %d/%d] %s loss: %6f. loss_inner_prod: %.6f, loss_norm_reg: %.6f, accuracy 5: %6f, 15: %6f, 25: %6f'\
+                    % (epoch, i, num_batch, blue('test'),
                     loss.item(), loss_inner_prod.item(), loss_norm_reg.item(),
                     accu_inner_prod[0], accu_inner_prod[1], accu_inner_prod[2]))    
+    if pred.isnan().sum() > 0 or loss.isnan().sum() > 0:
+        break
 
+    scheduler.step()
     torch.save(normal_predictor.state_dict(), '%s/normal_model_%d.pth' % (opt.outf, epoch))
 
 """
