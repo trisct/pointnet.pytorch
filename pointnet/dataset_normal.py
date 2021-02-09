@@ -10,6 +10,7 @@ import json
 from plyfile import PlyData, PlyElement
 import h5py
 from torch_geometric.nn import fps
+from open3d import *
 
 class NormalDataset(data.Dataset):
     def __init__(self,
@@ -126,7 +127,7 @@ class NormalDatasetAllInOne(data.Dataset):
 class NormalDatasetAllInOneFPS(data.Dataset):
     def __init__(self,
                  root,
-                 npoints=4096,
+                 npoints=2048,
                  split='train',
                  data_augmentation=True,
                  copy_len=None):
@@ -157,7 +158,8 @@ class NormalDatasetAllInOneFPS(data.Dataset):
         vnormal = self.data[objname + '_normal'][:]
 
         N_pts = point_set.shape[0]
-        fps_sample_index = fps(point_set, ratio=self.npoints/N_pts)
+        # maybe change this to offline sampling
+        fps_sample_index = fps(torch.from_numpy(point_set), ratio=self.npoints/N_pts)
         if self.npoints/N_pts > 1:
             print(f'[HERE: In pointnet.pytorch.pointnet.dataset_normal.NormalDatasetAllInOneFPS] Sample ratio {self.npoints/N_pts: .4f} = {self.npoints}/{N_pts} larger than 1!')
         if len(fps_sample_index) != self.npoints:
@@ -170,6 +172,8 @@ class NormalDatasetAllInOneFPS(data.Dataset):
         point_set = point_set - np.expand_dims(np.mean(point_set, axis = 0), 0) # center
         dist = np.max(np.sqrt(np.sum(point_set ** 2, axis = 1)),0)
         point_set = point_set / dist #scale
+
+        draw_geometries([point_set])
 
         #vnormal = vnormal[choice]
         vnormal = vnormal[fps_sample_index]

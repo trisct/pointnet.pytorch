@@ -6,7 +6,7 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset_normal import NormalDatasetAllInOne
+from pointnet.dataset_normal import NormalDatasetAllInOneFPS
 from pointnet.model import PointNetDenseNormalPred3DVer, feature_transform_regularizer
 from losses.normal_losses import inner_prod_loss, normalization_reg_loss
 import torch.nn.functional as F
@@ -34,7 +34,7 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
-dataset = NormalDatasetAllInOne(
+dataset = NormalDatasetAllInOneFPS(
     root=opt.dataset,
     copy_len=9000)
 dataloader = torch.utils.data.DataLoader(
@@ -44,7 +44,7 @@ dataloader = torch.utils.data.DataLoader(
     num_workers=int(opt.workers),
     drop_last=True)
 
-test_dataset = NormalDatasetAllInOne(
+test_dataset = NormalDatasetAllInOneFPS(
     root=opt.dataset,
     split='test',
     data_augmentation=False,
